@@ -1,0 +1,4 @@
+*.zip
+test/
+docker-compose.yml
+convertmax_old.zip

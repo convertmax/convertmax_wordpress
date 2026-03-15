@@ -1,0 +1,96 @@
+.convertmax-admin {
+    max-width: 980px;
+}
+
+.convertmax-admin__header {
+    margin: 20px 0 14px;
+}
+
+.convertmax-admin__brand {
+    align-items: center;
+    display: flex;
+    gap: 14px;
+}
+
+.convertmax-admin__logo {
+    display: block;
+    height: 48px;
+    width: 48px;
+}
+
+.convertmax-admin__brand-copy {
+    min-width: 0;
+}
+
+.convertmax-admin__header h1 {
+    margin-bottom: 6px;
+    margin-top: 0;
+}
+
+.convertmax-admin__header p {
+    margin: 0;
+    color: #50575e;
+    font-size: 14px;
+}
+
+.convertmax-admin__support {
+    margin-top: 28px;
+    padding-top: 10px;
+    border-top: 1px solid #dcdcde;
+}
+
+.convertmax-admin__support a {
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.convertmax-admin__support a:hover,
+.convertmax-admin__support a:focus {
+    text-decoration: underline;
+}
+
+.convertmax-tabs {
+    margin-bottom: 0;
+}
+
+.convertmax-admin__form {
+    margin-top: 0;
+}
+
+.convertmax-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    margin-top: 0;
+    padding: 8px 24px 12px;
+}
+
+.convertmax-card .form-table th {
+    font-weight: 600;
+    padding-top: 20px;
+    width: 280px;
+}
+
+.convertmax-card .form-table td {
+    padding-top: 16px;
+}
+
+.convertmax-card .description {
+    margin-top: 8px;
+}
+
+.convertmax-card input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.convertmax-admin .submit {
+    margin-top: 16px;
+    padding-top: 0;
+}
+
+@media (max-width: 782px) {
+    .convertmax-admin__brand {
+        align-items: flex-start;
+    }
+}
