@@ -28,6 +28,8 @@ After activation, go to **Convertmax > General Options** to configure your API k
 Source code:
 
 * [GitHub repository](https://github.com/convertmax/convertmax_wordpress)
+* Unminified JavaScript source is included in this plugin at `js/cm.js`
+* Minified production build is included at `js/cm.min.js`
 
 == Installation ==
 
@@ -35,6 +37,13 @@ Source code:
 2. Activate **Convertmax** from the Plugins screen.
 3. Open **Convertmax** in the WordPress admin menu.
 4. Enter your Convertmax public API key and save settings.
+
+== Development Notes ==
+
+The distributed SDK files included with this plugin are:
+
+* `js/cm.js` - human-readable source
+* `js/cm.min.js` - minified production build
 
 == Frequently Asked Questions ==
 

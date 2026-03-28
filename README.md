@@ -21,6 +21,11 @@ Convertmax tracks user activity and conversion events on your WordPress site.
 - Email: `help@convertmax.io`
 - GitHub: [https://github.com/convertmax/convertmax_wordpress](https://github.com/convertmax/convertmax_wordpress)
 
+## SDK Source
+
+- Unminified SDK source: `js/cm.js`
+- Minified SDK build: `js/cm.min.js`
+
 ## License
 
 This plugin is licensed under the **GNU General Public License, version 2 or later (GPLv2+)**.

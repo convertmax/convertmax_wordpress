@@ -96,61 +96,70 @@ function convertmax_custom() {
     $script = '';
     $convertmax_track_contact_form_7 = esc_attr( get_option( 'convertmax_track_contact_form_7' ) );
     if ( $convertmax_track_contact_form_7 ) {
-        $script .= <<<'JS'
-document.addEventListener('wpcf7submit', function(event) {
-    var cf7formid = '(not set)';
-    if (event && event.detail && event.detail.contactFormId) {
-        cf7formid = event.detail.contactFormId;
-    }
-
-    var cf7forminputs = [];
-    if (event && event.detail && event.detail.inputs) {
-        cf7forminputs = event.detail.inputs;
-    }
-
-    if (event && event.detail && event.detail.status && event.detail.status !== 'validation_failed') {
-        window.convertmaxTrackEvent('custom', {
-            cf7formid: cf7formid,
-            cf7forminputs: cf7forminputs
-        });
-    }
-});
-
-JS;
+        $script .= implode(
+            "\n",
+            array(
+                "document.addEventListener('wpcf7submit', function(event) {",
+                "    var cf7formid = '(not set)';",
+                "    if (event && event.detail && event.detail.contactFormId) {",
+                "        cf7formid = event.detail.contactFormId;",
+                '    }',
+                '',
+                '    var cf7forminputs = [];',
+                '    if (event && event.detail && event.detail.inputs) {',
+                '        cf7forminputs = event.detail.inputs;',
+                '    }',
+                '',
+                "    if (event && event.detail && event.detail.status && event.detail.status !== 'validation_failed') {",
+                "        window.convertmaxTrackEvent('custom', {",
+                '            cf7formid: cf7formid,',
+                '            cf7forminputs: cf7forminputs',
+                '        });',
+                '    }',
+                '});',
+                '',
+            )
+        );
     }
 
     $convertmax_track_wpforms = esc_attr( get_option( 'convertmax_track_wpforms' ) );
     if ( $convertmax_track_wpforms ) {
-        $script .= <<<'JS'
-jQuery('.wpforms-form').on('wpformsAjaxSubmitSuccess', function(event) {
-    var formId = jQuery(event.target).data('formid');
-    var formData = jQuery(event.target).serializeArray();
-
-    window.convertmaxTrackEvent('custom', {
-        wpformid: formId,
-        wpforminputs: formData
-    });
-});
-
-JS;
+        $script .= implode(
+            "\n",
+            array(
+                "jQuery('.wpforms-form').on('wpformsAjaxSubmitSuccess', function(event) {",
+                "    var formId = jQuery(event.target).data('formid');",
+                "    var formData = jQuery(event.target).serializeArray();",
+                '',
+                "    window.convertmaxTrackEvent('custom', {",
+                '        wpformid: formId,',
+                '        wpforminputs: formData',
+                '    });',
+                '});',
+                '',
+            )
+        );
     }
 
     $convertmax_track_formidable = esc_attr( get_option( 'convertmax_track_formidable' ) );
     if ( $convertmax_track_formidable ) {
-        $script .= <<<'JS'
-jQuery(document).ready(function($) {
-    $(document).on('frmFormComplete', function(event) {
-        var formId = jQuery(event.target).data('formid');
-        var formData = jQuery(event.target).serializeArray();
-
-        window.convertmaxTrackEvent('custom', {
-            wpformid: formId,
-            wpforminputs: formData
-        });
-    });
-});
-
-JS;
+        $script .= implode(
+            "\n",
+            array(
+                'jQuery(document).ready(function($) {',
+                "    $(document).on('frmFormComplete', function(event) {",
+                "        var formId = jQuery(event.target).data('formid');",
+                "        var formData = jQuery(event.target).serializeArray();",
+                '',
+                "        window.convertmaxTrackEvent('custom', {",
+                '            wpformid: formId,',
+                '            wpforminputs: formData',
+                '        });',
+                '    });',
+                '});',
+                '',
+            )
+        );
     }
 
     convertmax_add_inline_tracking_script( $script );
