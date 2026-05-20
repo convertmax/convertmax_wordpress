@@ -241,7 +241,7 @@ class Convertmax {
 
         wp_enqueue_script(
             'convertmax-sdk',
-            plugins_url( '../js/cm.min.js', __FILE__ ),
+            plugins_url( '../js/cm_v2.min.js', __FILE__ ),
             array(),
             $this->version,
             true

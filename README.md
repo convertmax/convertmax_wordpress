@@ -16,6 +16,10 @@ Convertmax tracks user activity and conversion events on your WordPress site.
 2. Activate **Convertmax** in Plugins.
 3. Open **Convertmax** in wp-admin and save your settings.
 
+## Local Testing
+
+- WordPress 7.0 local smoke test guide: [`TESTING_WORDPRESS_7.md`](../TESTING_WORDPRESS_7.md)
+
 ## Support
 
 - Email: `help@convertmax.io`
@@ -24,7 +28,7 @@ Convertmax tracks user activity and conversion events on your WordPress site.
 ## SDK Source
 
 - Unminified SDK source: `js/cm.js`
-- Minified SDK build: `js/cm.min.js`
+- Minified SDK build: `js/cm_v2.min.js`
 
 ## License
 

@@ -2,9 +2,9 @@
 Contributors: cbconvertmax
 Tags: analytics, tracking, lead generation, forms
 Requires at least: 5.8
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,7 +29,7 @@ Source code:
 
 * [GitHub repository](https://github.com/convertmax/convertmax_wordpress)
 * Unminified JavaScript source is included in this plugin at `js/cm.js`
-* Minified production build is included at `js/cm.min.js`
+* Minified production build is included at `js/cm_v2.min.js`
 
 == Installation ==
 
@@ -43,7 +43,7 @@ Source code:
 The distributed SDK files included with this plugin are:
 
 * `js/cm.js` - human-readable source
-* `js/cm.min.js` - minified production build
+* `js/cm_v2.min.js` - minified production build
 
 == Frequently Asked Questions ==
 
@@ -82,11 +82,15 @@ Site owners are responsible for:
 
 == Changelog ==
 
+= 1.0.1 =
+* Upgrade the bundled browser SDK to locally hosted `cm_v2.min.js`.
+* Preserve the existing WordPress bootstrap and event queue compatibility.
+
 = 1.0.0 =
 * Initial public release.
 * Settings page with general and form tracking options.
 
 == Upgrade Notice ==
 
-= 1.0.0 =
-Initial release.
+= 1.0.1 =
+Refreshes the bundled tracking SDK to the v2 local build.

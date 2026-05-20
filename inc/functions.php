@@ -307,6 +307,68 @@ function convertmax_payment_completed( $order_id ) {
     update_post_meta( $order_id, "_convertmax_count", 1 );
 }
 
+/**
+ * Build the Convertmax conversion payload for a WooCommerce order.
+ *
+ * @param int $order_id WooCommerce order ID.
+ * @return array|null
+ */
+function convertmax_get_order_conversion_payload( $order_id ) {
+    $order_id = (int) $order_id;
+
+    if ( $order_id <= 0 || ! function_exists( 'wc_get_order' ) ) {
+        return null;
+    }
+
+    $order = wc_get_order( $order_id );
+    if ( ! $order ) {
+        return null;
+    }
+
+    $items       = $order->get_items();
+    $product_ids = array();
+    $products    = array();
+
+    foreach ( $items as $item ) {
+        $product = $item->get_product();
+        $sku     = $product ? $product->get_sku() : '';
+
+        $product_id           = $item->get_product_id();
+        $product_variation_id = $item->get_variation_id();
+        $item_price           = $item->get_total();
+        $item_quantity        = $item->get_quantity();
+        $item_total           = $item->get_total() * $item->get_quantity();
+
+        if ( $product_variation_id ) {
+            $product_ids[] = $product_variation_id;
+        } else {
+            $product_ids[] = $product_id;
+        }
+
+        $products[] = array(
+            'sku'       => $sku,
+            'price'     => $item_price,
+            'qty'       => $item_quantity,
+            'itemTotal' => $item_total,
+        );
+    }
+
+    return array(
+        'id'             => (string) $order->get_id(),
+        'revenue'        => (string) $order->get_subtotal(),
+        'customer'       => (string) $order->get_customer_id(),
+        'email'          => (string) $order->get_billing_email(),
+        'products'       => $product_ids,
+        'productDetails' => $products,
+        'orderInfo'      => array(
+            'order_id'    => $order->get_id(),
+            'customer_id' => $order->get_user_id(),
+            'coupons'     => $order->get_coupon_codes(),
+        ),
+        'orderData'      => $order->get_data(),
+    );
+}
+
 add_action( 'wp_footer', 'convertmax_convert' );
 function convertmax_convert() {
     if ( ! convertmax_should_track() ) {
@@ -315,19 +377,35 @@ function convertmax_convert() {
 
     global $convertmax_order_id, $convertmax_order_subtotal, $convertmax_order_customer_id, $convertmax_order_customer_email, $convertmax_order_product_ids, $convertmax_order_products, $convertmax_order_info, $convertmax_order_data;
 
-    if ( !empty( $convertmax_order_id ) ) {    
-        $script = 'window.convertmaxTrackEvent("convert", ' . wp_json_encode(
-            array(
-                'id'             => (string) $convertmax_order_id,
-                'revenue'        => (string) $convertmax_order_subtotal,
-                'customer'       => (string) $convertmax_order_customer_id,
-                'email'          => (string) $convertmax_order_customer_email,
-                'products'       => $convertmax_order_product_ids,
-                'productDetails' => $convertmax_order_products,
-                'orderInfo'      => $convertmax_order_info,
-                'orderData'      => $convertmax_order_data,
-            )
-        ) . ');';
+    $payload = null;
+
+    if ( ! empty( $convertmax_order_id ) ) {
+        $payload = array(
+            'id'             => (string) $convertmax_order_id,
+            'revenue'        => (string) $convertmax_order_subtotal,
+            'customer'       => (string) $convertmax_order_customer_id,
+            'email'          => (string) $convertmax_order_customer_email,
+            'products'       => $convertmax_order_product_ids,
+            'productDetails' => $convertmax_order_products,
+            'orderInfo'      => $convertmax_order_info,
+            'orderData'      => $convertmax_order_data,
+        );
+    } elseif ( function_exists( 'is_order_received_page' ) && is_order_received_page() ) {
+        $order_id = absint( get_query_var( 'order-received' ) );
+
+        if ( ! $order_id && isset( $_GET['key'] ) ) {
+            $order_id = wc_get_order_id_by_order_key( sanitize_text_field( wp_unslash( $_GET['key'] ) ) );
+        }
+
+        $payload = convertmax_get_order_conversion_payload( $order_id );
+
+        if ( $payload ) {
+            update_post_meta( $order_id, '_convertmax_count', 1 );
+        }
+    }
+
+    if ( $payload ) {
+        $script = 'window.convertmaxTrackEvent("convert", ' . wp_json_encode( $payload ) . ');';
         convertmax_add_inline_tracking_script( $script );
     }
 }
