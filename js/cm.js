@@ -1,721 +1,1111 @@
-/*
- * cm_v1.js v1 - Build: #
- * (c) 2021 Convertmax.io
- * https://www.convertmax.io
+/*!
+ * cm_v2.js - Modern browser client for Convertmax
+ * Built from the current @convertmax/js browser behavior with a legacy-friendly global API.
  */
-
-// MIT Licensed Ajax Library
-// https://github.com/fdaciuk/ajax
-var CMAjax = (function () {
+(function initConvertmaxBrowser(window, document) {
   "use strict";
 
-  function ajax(options) {
-    var methods = ["get", "post", "put", "delete"];
-    options = options || {};
-    options.baseUrl = options.baseUrl || "";
-    if (options.method && options.url) {
-      return xhrConnection(
-        options.method,
-        options.baseUrl + options.url,
-        maybeData(options.data),
-        options
+  if (!window || !document) {
+    return;
+  }
+
+  var VERSION = "2.0.0";
+  var DEFAULT_HOST = "https://event.convertmax.io";
+  var DEFAULT_ENDPOINT_PATH = "/v1/track/";
+  var DEFAULT_ANONYMOUS_ID_STORAGE_KEY = "convertmax_anonymous_id";
+  var DEFAULT_VISITOR_STORAGE_KEY = "cm_visitor";
+  var DEFAULT_SESSION_COOKIE_KEY = "cm_session";
+  var OPT_OUT_STORAGE_KEY = "cm_ignore_event";
+  var DEFAULT_SESSION_TIMEOUT_MINUTES = 35;
+  var CLICK_TRACK_CLASS = "searcheo";
+  var ORGANIC_HOSTS = ["bing", "google", "yahoo", "about", "ask", "aol"];
+  var SOCIAL_HOSTS = [
+    "facebook",
+    "fb.me",
+    "instagram",
+    "linkedin",
+    "lnkd.in",
+    "pinterest",
+    "twitter",
+    "t.co",
+    "youtube",
+    "youtu.be"
+  ];
+  var SEARCH_QUERY_KEYS = ["q", "p", "query", "k", "keyword", "term", "text"];
+  var ATTRIBUTION_PARAM_CONFIG = {
+    gclid: {
+      storageKey: "cm_gclid",
+      envelopeKey: "gclid",
+      platform: "google"
+    },
+    msclkid: {
+      storageKey: "cm_msclk",
+      envelopeKey: "msclk",
+      platform: "bing"
+    },
+    ttclid: {
+      storageKey: "cm_ttclid",
+      envelopeKey: "ttclid",
+      platform: "tiktok"
+    },
+    fbclid: {
+      storageKey: "cm_fbclid",
+      envelopeKey: "fbclid",
+      platform: "facebook"
+    },
+    scclid: {
+      storageKey: "cm_scclid",
+      envelopeKey: "scclid",
+      platform: "snapchat"
+    },
+    epik: {
+      storageKey: "cm_epik",
+      envelopeKey: "epik",
+      platform: "pinterest"
+    },
+    twclid: {
+      storageKey: "cm_twclid",
+      envelopeKey: "twclid",
+      platform: "twitter"
+    },
+    li_fat_id: {
+      storageKey: "cm_li_fat_id",
+      envelopeKey: "li_fat_id",
+      platform: "linkedin"
+    },
+    tag: {
+      storageKey: "cm_tag",
+      envelopeKey: "tag",
+      platform: "taboola"
+    },
+    yclid: {
+      storageKey: "cm_yclid",
+      envelopeKey: "yclid",
+      platform: "yandex"
+    },
+    rdt_cid: {
+      storageKey: "cm_rdt_cid",
+      envelopeKey: "rdt_cid",
+      platform: "reddit"
+    },
+    qaid: {
+      storageKey: "cm_qaid",
+      envelopeKey: "qaid",
+      platform: "quora"
+    }
+  };
+
+  function dispatchBrowserEvent(name) {
+    if (typeof window.dispatchEvent !== "function") {
+      return;
+    }
+
+    try {
+      window.dispatchEvent(new Event(name));
+    } catch (error) {
+      if (typeof document.createEvent === "function") {
+        var fallbackEvent = document.createEvent("Event");
+        fallbackEvent.initEvent(name, true, true);
+        window.dispatchEvent(fallbackEvent);
+      }
+    }
+  }
+
+  function getFetchImplementation(options) {
+    return options.fetch || window.fetch;
+  }
+
+  function normalizeHost(host) {
+    return String(host || DEFAULT_HOST).replace(/\/+$/, "");
+  }
+
+  function normalizeEndpoint(eventURL, host) {
+    if (eventURL) {
+      return /\/v1\/track\/?$/.test(eventURL)
+        ? eventURL.replace(/\/?$/, "/")
+        : normalizeHost(eventURL) + DEFAULT_ENDPOINT_PATH;
+    }
+
+    return normalizeHost(host || DEFAULT_HOST) + DEFAULT_ENDPOINT_PATH;
+  }
+
+  function createAnonymousId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+
+    return "cm_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
+  function createSessionId(visitorPrefix) {
+    var prefix = String(visitorPrefix || "cm").slice(0, 3) || "cm";
+    return prefix + "_" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+  }
+
+  function getBrowserStorageValue(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function setBrowserStorageValue(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {}
+  }
+
+  function removeBrowserStorageValue(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {}
+  }
+
+  function getRootDomain(hostname) {
+    if (!hostname || hostname === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return undefined;
+    }
+
+    var parts = hostname.split(".").filter(Boolean);
+    if (parts.length < 2) {
+      return undefined;
+    }
+
+    return parts.slice(-2).join(".");
+  }
+
+  function getCookieValue(name) {
+    if (typeof document.cookie !== "string") {
+      return null;
+    }
+
+    var prefix = name + "=";
+    var parts = document.cookie.split(";");
+    for (var index = 0; index < parts.length; index += 1) {
+      var value = parts[index].trim();
+      if (value.indexOf(prefix) === 0) {
+        return decodeURIComponent(value.slice(prefix.length));
+      }
+    }
+
+    return null;
+  }
+
+  function setCookieValue(name, value, expiresAt) {
+    var segments = [name + "=" + encodeURIComponent(value), "path=/"];
+
+    if (expiresAt) {
+      segments.push("expires=" + new Date(expiresAt).toUTCString());
+    }
+
+    var rootDomain = getRootDomain(window.location.hostname);
+    if (rootDomain) {
+      segments.push("domain=" + rootDomain);
+    }
+
+    document.cookie = segments.join("; ");
+  }
+
+  function clearCookieValue(name) {
+    var segments = [name + "=", "path=/", "expires=Thu, 01 Jan 1970 00:00:01 GMT"];
+    var rootDomain = getRootDomain(window.location.hostname);
+    if (rootDomain) {
+      segments.push("domain=" + rootDomain);
+    }
+
+    document.cookie = segments.join("; ");
+  }
+
+  function getBrowserContext() {
+    return {
+      url: window.location.href,
+      path: window.location.pathname,
+      title: document.title || undefined,
+      referrer: document.referrer || undefined,
+      userAgent: window.navigator.userAgent,
+      language: window.navigator.language,
+      screenWidth: window.screen && window.screen.width,
+      screenHeight: window.screen && window.screen.height
+    };
+  }
+
+  function delay(ms) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function detectMobileUserAgent(userAgent) {
+    return /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(
+      userAgent || ""
+    );
+  }
+
+  function getQueryParams() {
+    try {
+      return new URLSearchParams(window.location.search);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function getReferrerUrl() {
+    if (!document.referrer) {
+      return null;
+    }
+
+    try {
+      return new URL(document.referrer);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function getReferrerHost(referrerUrl) {
+    return referrerUrl ? referrerUrl.hostname.replace(/^www[0-9]?\./, "") : undefined;
+  }
+
+  function findMatchingHost(host, candidates) {
+    if (!host) {
+      return undefined;
+    }
+
+    for (var index = 0; index < candidates.length; index += 1) {
+      if (host.indexOf(candidates[index]) > -1) {
+        return candidates[index];
+      }
+    }
+
+    return undefined;
+  }
+
+  function cloneObject(input) {
+    return Object.assign({}, input || {});
+  }
+
+  function syncAnchorsWithin(root) {
+    if (!root || typeof root.querySelectorAll !== "function") {
+      return;
+    }
+
+    var links = root.querySelectorAll("a");
+    for (var index = 0; index < links.length; index += 1) {
+      links[index].classList.add(CLICK_TRACK_CLASS);
+    }
+  }
+
+  function createBrowserClient(initialOptions) {
+    var options = cloneObject(initialOptions);
+    var initialized = false;
+    var autoPageListenersAttached = false;
+    var exitFlushAttached = false;
+    var clickTrackingAttached = false;
+    var identifiedUserId;
+    var groupedId;
+    var anonymousId =
+      getBrowserStorageValue(DEFAULT_VISITOR_STORAGE_KEY) || createAnonymousId();
+    var sessionId;
+    var lastAutoPageKey;
+    var doNotTrack = Boolean(options.optOutTrackingByDefault);
+    var mobile = false;
+    var cfUvid;
+    var attributionState = {};
+    var lastReferrerSignature;
+    var publicState = {
+      config: {},
+      debug: false,
+      apiKey: undefined,
+      eventURL: DEFAULT_HOST,
+      visitor: anonymousId,
+      session_id: undefined,
+      anonymousId: anonymousId,
+      doNotTrack: doNotTrack,
+      mobile: false,
+      gclid: undefined,
+      msclk: undefined,
+      cf_uvid: undefined
+    };
+
+    function updatePublicState() {
+      publicState.config = cloneObject(options);
+      publicState.debug = Boolean(options.debug);
+      publicState.apiKey = options.apiKey || options.writeKey || undefined;
+      publicState.eventURL = options.eventURL || options.host || DEFAULT_HOST;
+      publicState.visitor = anonymousId;
+      publicState.session_id = sessionId;
+      publicState.anonymousId = anonymousId;
+      publicState.doNotTrack = doNotTrack;
+      publicState.mobile = mobile;
+      publicState.gclid = attributionState.gclid;
+      publicState.msclk = attributionState.msclk;
+      publicState.cf_uvid = cfUvid;
+    }
+
+    function syncVisitorState() {
+      var storageKey =
+        options.anonymousIdStorageKey || DEFAULT_ANONYMOUS_ID_STORAGE_KEY;
+
+      setBrowserStorageValue(storageKey, anonymousId);
+      setBrowserStorageValue(DEFAULT_VISITOR_STORAGE_KEY, anonymousId);
+      setCookieValue(DEFAULT_VISITOR_STORAGE_KEY, anonymousId, 253402300799000);
+    }
+
+    function getOrCreateSessionId() {
+      var cookieSession = getCookieValue(DEFAULT_SESSION_COOKIE_KEY);
+      var nextSessionId = cookieSession || createSessionId(anonymousId.slice(0, 3));
+      var timeoutMinutes =
+        options.sessionTimeoutMinutes || DEFAULT_SESSION_TIMEOUT_MINUTES;
+
+      setCookieValue(
+        DEFAULT_SESSION_COOKIE_KEY,
+        nextSessionId,
+        Date.now() + timeoutMinutes * 60 * 1000
+      );
+
+      return nextSessionId;
+    }
+
+    function getAutoPageProperties() {
+      return {
+        page: window.location.href,
+        path: window.location.pathname,
+        search: window.location.search || undefined,
+        title: document.title || undefined
+      };
+    }
+
+    function getAutoPageKey() {
+      return window.location.pathname + window.location.search;
+    }
+
+    async function sendEnvelope(envelope, transportOptions) {
+      var fetchImpl = getFetchImplementation(transportOptions);
+      if (!fetchImpl) {
+        throw new Error("Convertmax requires window.fetch in the browser runtime.");
+      }
+
+      var endpoint = normalizeEndpoint(
+        transportOptions.eventURL,
+        transportOptions.host
+      );
+      var maxRetries = transportOptions.maxRetries || 0;
+      var retryDelayMs = transportOptions.retryDelayMs || 250;
+      var attempt = 0;
+      var lastError;
+
+      while (attempt <= maxRetries) {
+        try {
+          var response = await fetchImpl(endpoint, {
+            method: "POST",
+            headers: Object.assign(
+              { "content-type": "application/json" },
+              transportOptions.apiKey || transportOptions.writeKey
+                ? {
+                    authorization:
+                      "Bearer " +
+                      (transportOptions.apiKey || transportOptions.writeKey)
+                  }
+                : {}
+            ),
+            body: JSON.stringify(envelope),
+            keepalive: true
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              "Convertmax request failed with status " + response.status
+            );
+          }
+
+          return;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+
+          if (attempt === maxRetries) {
+            break;
+          }
+
+          attempt += 1;
+          await delay(retryDelayMs * attempt);
+        }
+      }
+
+      throw lastError || new Error("Convertmax request failed");
+    }
+
+    function createBaseEnvelope() {
+      return Object.assign(
+        {
+          anonymousId: anonymousId,
+          sessionId: sessionId,
+          context: Object.assign(
+            {},
+            getBrowserContext(),
+            mobile ? { deviceType: "mobile" } : {},
+            cfUvid ? { cfUvid: cfUvid } : {}
+          ),
+          timestamp: new Date().toISOString()
+        },
+        attributionState,
+        cfUvid ? { cf_uvid: cfUvid } : {}
       );
     }
-    return methods.reduce(function (acc, method) {
-      acc[method] = function (url, data) {
-        return xhrConnection(
-          method,
-          options.baseUrl + url,
-          maybeData(data),
-          options
-        );
-      };
-      return acc;
-    }, {});
-  }
 
-  function maybeData(data) {
-    // EDIT - Convert to JSON string
-    if (typeof data === "object") {
-      return JSON.stringify(data);
-    } else {
-      return data || null;
-    }
-  }
-
-  function xhrConnection(type, url, data, options) {
-    var returnMethods = ["then", "catch", "always"];
-    var promiseMethods = returnMethods.reduce(function (promise, method) {
-      promise[method] = function (callback) {
-        promise[method] = callback;
-        return promise;
-      };
-      return promise;
-    }, {});
-    var xhr = new XMLHttpRequest();
-    var featuredUrl = getUrlWithData(url, data, type);
-    xhr.open(type, featuredUrl, true);
-    xhr.withCredentials = options.hasOwnProperty("withCredentials");
-    setHeaders(xhr, options.headers);
-    xhr.addEventListener("readystatechange", ready(promiseMethods, xhr), false);
-    xhr.send(objectToQueryString(data));
-    promiseMethods.abort = function () {
-      return xhr.abort();
-    };
-    return promiseMethods;
-  }
-
-  function getUrlWithData(url, data, type) {
-    if (type.toLowerCase() !== "get" || !data) {
-      return url;
-    }
-    var dataAsQueryString = objectToQueryString(data);
-    var queryStringSeparator = url.indexOf("?") > -1 ? "&" : "?";
-    return url + queryStringSeparator + dataAsQueryString;
-  }
-
-  function setHeaders(xhr, headers) {
-    headers = headers || {};
-    if (!hasContentType(headers)) {
-      headers["Content-Type"] = "application/x-www-form-urlencoded";
-    }
-    Object.keys(headers).forEach(function (name) {
-      headers[name] && xhr.setRequestHeader(name, headers[name]);
-    });
-  }
-
-  function hasContentType(headers) {
-    return Object.keys(headers).some(function (name) {
-      return name.toLowerCase() === "content-type";
-    });
-  }
-
-  function ready(promiseMethods, xhr) {
-    return function handleReady() {
-      if (xhr.readyState === xhr.DONE) {
-        xhr.removeEventListener("readystatechange", handleReady, false);
-        promiseMethods.always.apply(promiseMethods, parseResponse(xhr));
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          promiseMethods.then.apply(promiseMethods, parseResponse(xhr));
-        } else {
-          promiseMethods.catch.apply(promiseMethods, parseResponse(xhr));
-        }
+    async function dispatch(envelope) {
+      if (options.disabled || doNotTrack) {
+        return;
       }
-    };
-  }
 
-  function parseResponse(xhr) {
-    var result;
-    try {
-      result = JSON.parse(xhr.responseText);
-    } catch (e) {
-      result = xhr.responseText;
+      if (!initialized) {
+        await init();
+      }
+
+      if (options.debug && window.console && typeof window.console.debug === "function") {
+        window.console.debug("[convertmax]", envelope);
+      }
+
+      await sendEnvelope(envelope, options);
     }
-    return [result, xhr];
-  }
 
-  function objectToQueryString(data) {
-    return isObject(data) ? getQueryString(data) : data;
-  }
+    async function emitAutoPageView() {
+      var nextKey = getAutoPageKey();
+      if (!nextKey || nextKey === lastAutoPageKey) {
+        return;
+      }
 
-  function isObject(data) {
-    return Object.prototype.toString.call(data) === "[object Object]";
-  }
-
-  function getQueryString(object) {
-    return Object.keys(object).reduce(function (acc, item) {
-      var prefix = !acc ? "" : acc + "&";
-      return prefix + encode(item) + "=" + encode(object[item]);
-    }, "");
-  }
-
-  function encode(value) {
-    return encodeURIComponent(value);
-  }
-
-  return ajax;
-})();
-
-function _now() {
-  var time = Date.now();
-  var last = _now.last || time;
-  return (_now.last = time > last ? time : last + 1);
-}
-
-function deleteCookie(name) {
-  document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/;  domain=" + this.client.rootDomain + ";";
-}
-
-// IE11 polyfills
-if (!Element.prototype.matches)
-  Element.prototype.matches =
-  Element.prototype.msMatchesSelector ||
-  Element.prototype.webkitMatchesSelector;
-
-if (!Element.prototype.closest) {
-  Element.prototype.closest = function (s) {
-    var el = this;
-    if (!document.documentElement.contains(el)) return null;
-    do {
-      if (el.matches(s)) return el;
-      el = el.parentElement || el.parentNode;
-    } while (el !== null && el.nodeType === 1);
-    return null;
-  };
-}
-
-var Convertmax = (function () {
-  "use strict";
-
-  function _toArray(nl) {
-    for (var a = [], l = nl.length; l--; a[l] = nl[l]);
-    return a;
-  }
-
-  function _getCookie(name) {
-    var value = "; " + document.cookie;
-    var parts = value.split("; " + name + "=");
-    if (parts.length == 2)
-      return parts
-        .pop()
-        .split(";")
-        .shift();
-    else return null;
-  }
-
-  function _getParams(url) {
-    var params = {};
-    var parser = document.createElement("a");
-    parser.href = url;
-    var query = parser.search.substring(1);
-    var vars = query.split("&");
-    for (var i = 0; i < vars.length; i++) {
-      var pair = vars[i].split("=");
-      params[pair[0]] = decodeURIComponent(pair[1]);
+      lastAutoPageKey = nextKey;
+      await dispatch(
+        Object.assign(
+          {
+            type: "track",
+            event: "page_view",
+            properties: getAutoPageProperties(),
+            userId: identifiedUserId
+          },
+          createBaseEnvelope()
+        )
+      );
     }
-    return params;
-  }
 
-  function _random_prefix() {
-    return (
-      Date.now().toString(36) +
-      Math.random()
-      .toString(36)
-      .substr(2, 5)
-    );
-  }
+    function attachAutoPageListeners() {
+      if (autoPageListenersAttached || !window.history) {
+        return;
+      }
 
-  function _unique_visitor_id(prefix) {
-    return (prefix || "") + _random_prefix() + _now().toString(36);
-  }
+      autoPageListenersAttached = true;
 
-  function _unique_session_id(prefix) {
-    return (
-      (prefix || "") +
-      new Date()
-      .getTime()
-      .toString(36)
-      .toUpperCase()
-    );
-  }
+      var onRouteChange = function () {
+        void emitAutoPageView();
+      };
 
-  function _get_expiry_record(value) {
-    // gclid
-    var expiryPeriod = ConvertmaxClient.client.config.clkExpiry * 24 * 60 * 60 * 1000; // # of day expiry in milliseconds
+      var originalPushState = window.history.pushState.bind(window.history);
+      var originalReplaceState = window.history.replaceState.bind(window.history);
 
-    var expiryDate = new Date().getTime() + expiryPeriod;
-    return {
-      value: value,
-      expiryDate: expiryDate
-    };
-  }
+      window.history.pushState = function () {
+        originalPushState.apply(window.history, arguments);
+        onRouteChange();
+      };
 
-  function _chkCPC() {
-    var details = {};
-    var url_params = _getParams(window.location.href);
-    var gclidRecord = null;
-    var msclkRecord = null;
-    var hasStorage = typeof Storage !== "undefined" && typeof localStorage !== "undefined";
+      window.history.replaceState = function () {
+        originalReplaceState.apply(window.history, arguments);
+        onRouteChange();
+      };
 
-    if (
-      url_params &&
-      (url_params.hasOwnProperty("gclid") ||
-        url_params.hasOwnProperty("msclkid"))
-    ) {
-      ConvertmaxClient.client.cpc = true;
-      Object.keys(url_params).forEach(function (key, index) {
+      window.addEventListener("popstate", onRouteChange);
+    }
+
+    function getStoredAttributionValue(key) {
+      var raw = getBrowserStorageValue(ATTRIBUTION_PARAM_CONFIG[key].storageKey);
+      if (!raw) {
+        return null;
+      }
+
+      try {
+        var parsed = JSON.parse(raw);
+        if (!parsed.value || !parsed.expiryDate || Date.now() >= parsed.expiryDate) {
+          removeBrowserStorageValue(ATTRIBUTION_PARAM_CONFIG[key].storageKey);
+          return null;
+        }
+
+        return parsed.value;
+      } catch (error) {
+        removeBrowserStorageValue(ATTRIBUTION_PARAM_CONFIG[key].storageKey);
+        return null;
+      }
+    }
+
+    function storeAttributionValue(key, value) {
+      var clkExpiryDays = options.clkExpiryDays || 90;
+      setBrowserStorageValue(
+        ATTRIBUTION_PARAM_CONFIG[key].storageKey,
+        JSON.stringify({
+          value: value,
+          expiryDate: Date.now() + clkExpiryDays * 24 * 60 * 60 * 1000
+        })
+      );
+    }
+
+    function refreshAttributionState(params) {
+      var nextState = {};
+      Object.keys(ATTRIBUTION_PARAM_CONFIG).forEach(function (key) {
+        var config = ATTRIBUTION_PARAM_CONFIG[key];
+        var value = (params && params.get(key)) || getStoredAttributionValue(key);
+        if (value) {
+          nextState[config.envelopeKey] = value;
+        }
+      });
+      attributionState = nextState;
+    }
+
+    async function detectAttribution() {
+      var params = getQueryParams();
+      if (!params) {
+        return;
+      }
+
+      var detectedKeys = [];
+      Object.keys(ATTRIBUTION_PARAM_CONFIG).forEach(function (key) {
+        var value = params.get(key);
+        if (!value) {
+          return;
+        }
+
+        storeAttributionValue(key, value);
+        detectedKeys.push(key);
+      });
+
+      refreshAttributionState(params);
+      updatePublicState();
+
+      if (!detectedKeys.length) {
+        return;
+      }
+
+      var firstDetectedKey = detectedKeys[0];
+      var properties = {
+        source: "api",
+        page: window.location.href,
+        cpc: ATTRIBUTION_PARAM_CONFIG[firstDetectedKey].platform
+      };
+
+      params.forEach(function (value, key) {
         if (
-          key.indexOf("utm_") > -1 ||
+          key.indexOf("utm_") === 0 ||
           key.indexOf("keyword") > -1 ||
           key.indexOf("term") > -1 ||
-          key.indexOf("gclid") > -1
+          Object.prototype.hasOwnProperty.call(ATTRIBUTION_PARAM_CONFIG, key)
         ) {
-          details[key] = url_params[key];
+          properties[key] = value;
         }
       });
 
-      if (url_params.hasOwnProperty("gclid")) {
-        details["cpc"] = "google";
-        gclidRecord = _get_expiry_record(url_params["gclid"]);
-        if (hasStorage) {
-            localStorage.setItem('cm_gclid', JSON.stringify(gclidRecord));
-        }
-        ConvertmaxClient.client.gclid = url_params["gclid"];
-      } else if (url_params.hasOwnProperty("msclkid")) {
-        details["cpc"] = "bing";
-        msclkRecord = _get_expiry_record(url_params["msclkid"]);
-        if (hasStorage) {
-            localStorage.setItem('cm_msclk', JSON.stringify(msclkRecord));
-        }
-        ConvertmaxClient.client.msclk = url_params["msclkid"];
-      }
+      detectedKeys.forEach(function (key) {
+        properties[key] = params.get(key);
+      });
 
-      details["page"] = window.location.href;
-      ConvertmaxClient.track("cpc", details);
+      await dispatch(
+        Object.assign(
+          {
+            type: "track",
+            event: "cpc",
+            properties: properties,
+            userId: identifiedUserId
+          },
+          createBaseEnvelope()
+        )
+      );
     }
-  }
 
-  function _chkOrganic() {
-    var organics = ["bing", "google", "yahoo", "about", "ask", "aol"];
-
-    if (document.referrer && !ConvertmaxClient.client.cpc) {
-      var matches = document.referrer.match(/:\/\/(www[0-9]?\.)?(.[^/:]+)/i);
-      if (matches && matches.length > 2) {
-        for (var i = 0; i < organics.length; i++) {
-          if (matches[2].indexOf(organics[i]) > -1) {
-            ConvertmaxClient.client.organic = true;
-            ConvertmaxClient.track("organic", {
-              host: organics[i],
-              referrer: document.referrer
-            });
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  function _chkSocial() {
-    var social = ["facebook", "fb.me", "instagram", "linkedin", "lnkd.in", "pinterest", "twitter", "t.co", "youtube", "youtu.be"];
-
-    if (document.referrer && !ConvertmaxClient.client.cpc && !ConvertmaxClient.client.organic) {
-      var matches = document.referrer.match(/:\/\/(www[0-9]?\.)?(.[^/:]+)/i);
-      if (matches && matches.length > 2) {
-        for (var i = 0; i < social.length; i++) {
-          if (matches[2].indexOf(social[i]) > -1) {
-            ConvertmaxClient.client.social = true;
-            ConvertmaxClient.track("social", {
-              host: social[i],
-              referrer: document.referrer
-            });
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  function _chkMobile() {
-    // Uses is-mobile function isMobile
-    var mobileRE = /(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series[46]0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i
-    var tabletRE = /(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series[46]0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino|android|ipad|playbook|silk/i
-
-    var ua = null;
-    if (!ua && typeof navigator !== 'undefined') ua = navigator.userAgent
-    if (ua && ua.headers && typeof ua.headers['user-agent'] === 'string') {
-      ua = ua.headers['user-agent']
-    }
-    if (typeof ua !== 'string') return false
-
-    if (tabletRE.test(ua) || mobileRE.test(ua)) {
-      ConvertmaxClient.client.mobile = true;
-    }
-  }
-
-  function _renderRecommendations() {
-    var elements = _toArray(document.querySelectorAll('[data-sio-render]'));
-    elements.forEach(function (element) {
-      var callback_opt = element.getAttribute('data-sio-callback');
-      var api_method_opt = element.getAttribute('data-sio-api');
-      var count_opt = element.getAttribute('data-sio-count');
-      var products_opt = element.getAttribute('data-sio-products');
-
-      var options = {
-        'callback': callback_opt,
-        'limit': count_opt,
-        'items': products_opt || [],
-        'element': element
-      };
-
-      if (api_method_opt && api_method_opt == 'recommendations/similar') {
-        ConvertmaxClient.getSimilarProducts(options);
+    async function detectReferrerTraffic() {
+      var referrerUrl = getReferrerUrl();
+      var referrer = referrerUrl && referrerUrl.toString();
+      if (!referrer) {
+        return;
       }
 
-    });
-  }
-
-  function _attachClickHandlers() {
-    // Add searcheo class to all underlying links
-    var elements = _toArray(document.querySelectorAll(".searcheo"));
-    elements.forEach(function (element) {
-      var links = element.getElementsByTagName("a");
-      for (var i = 0; i < links.length; i++) {
-        links[i].classList.add("searcheo");
+      var signature = window.location.href + "|" + referrer;
+      if (signature === lastReferrerSignature) {
+        return;
       }
-    });
 
-    document.addEventListener("click", function (e) {
-      var evt_type = "click";
-      var anchor = e.target.closest("a");
-      if (
-        anchor &&
-        anchor.classList.length > 0 &&
-        anchor.classList.contains("searcheo") &&
-        anchor.href.length > 0
-      ) {
-        var cm_type = anchor.getAttribute("data-sio-type");
-        var cm_target = anchor.href;
-        if (cm_type && cm_type == "add-cart") {
-          evt_type = "add_cart";
-        }
+      var hasPaidAttribution = Object.keys(attributionState).length > 0;
+      var host = getReferrerHost(referrerUrl);
+      var organicHost =
+        options.autoOrganic === false ? undefined : findMatchingHost(host, ORGANIC_HOSTS);
 
-        ConvertmaxClient.track(evt_type, {
-          cm_type: cm_type,
-          cm_target: cm_target
-        });
-      }
-    });
-  }
+      if (organicHost && !hasPaidAttribution) {
+        lastReferrerSignature = signature;
 
-  function _process_queued_event() {
-    if (this) {
-      if (this.length >= 1 && typeof this[0] === "object") {
-        var event = this[0];
+        await dispatch(
+          Object.assign(
+            {
+              type: "track",
+              event: "organic",
+              properties: Object.assign({}, getAutoPageProperties(), {
+                host: organicHost,
+                referrer: referrer
+              }),
+              userId: identifiedUserId
+            },
+            createBaseEnvelope()
+          )
+        );
 
-        if (typeof event[0] === "string") {
-          switch (event[0]) {
-            case "config":
-              ConvertmaxClient._config(event[1]);
-              _attachClickHandlers();
-              _chkCPC();
-              _chkOrganic();
-              _chkSocial();
-              _chkMobile();
-              _chkForms();
-              _chkIntegrations();
-              ConvertmaxClient._convertmaxReady();
+        if (options.autoSearch !== false && referrerUrl) {
+          var query = null;
+          for (var index = 0; index < SEARCH_QUERY_KEYS.length; index += 1) {
+            query = referrerUrl.searchParams.get(SEARCH_QUERY_KEYS[index]);
+            if (query) {
               break;
+            }
           }
-        }
-      }
-    }
-  }
 
-  function _valid_gclid() {
-    var hasStorage =
-        typeof Storage !== "undefined" && typeof localStorage !== "undefined";
-    var cm_gclid = null;
-    if (hasStorage) {
-        cm_gclid = JSON.parse(localStorage.getItem('cm_gclid'));
-        var isGclidValid = cm_gclid && new Date().getTime() < cm_gclid.expiryDate;
-        if (cm_gclid && isGclidValid){
-            cm_gclid = cm_gclid["value"]
-        }
-    }
-    return cm_gclid;
-  }
-
-  function _valid_msclk() {
-    var hasStorage =
-        typeof Storage !== "undefined" && typeof localStorage !== "undefined";
-    var cm_msclk = null;
-    if (hasStorage) {
-        cm_msclk = JSON.parse(localStorage.getItem('cm_msclk'));
-        var isMsclkValid = cm_msclk && new Date().getTime() < cm_msclk.expiryDate;
-        if (cm_msclk && isMsclkValid){
-            cm_msclk = cm_msclk["value"]
-        }
-    }
-    return cm_msclk;
-
-  }
-
-  function _chkForms() {
-    if (ConvertmaxClient.client.config.chkForms) {
-      var elements = _toArray(document.querySelectorAll('input[name="cm_visitor"]'));
-      elements.forEach(function (element) {
-        element.value = ConvertmaxClient.client.visitor;
-      });
-      elements = _toArray(document.querySelectorAll('input[name="cm_session"]'));
-      elements.forEach(function (element) {
-        element.value = ConvertmaxClient.client.session_id;
-      });
-    }
-  }
-
-  function _chkIntegrations() {
-    var hasStorage = typeof Storage !== "undefined" && typeof localStorage !== "undefined";
-    if (hasStorage) {
-      // Clickfunnels
-      var cf_uvid = localStorage.getItem('cf_uvid')
-      if (cf_uvid !== undefined) {
-        ConvertmaxClient.client.cf_uvid = cf_uvid;
-      }
-    }
-  }
-
-  var ConvertmaxClient = {
-    client: {
-      config: {}
-    }
-  };
-
-  ConvertmaxClient._config = function (client) {
-    this.client.config = client;
-    this.client.config.debug = client.debug || false;
-    this.client.config.apiKey = client.apiKey || "NO API KEY";
-    this.client.config.chkForms = client.chkForms || true;
-    this.client.config.clkExpiry = parseInt(client.clkExpiry) || 90;
-    this.client.language = navigator.language || navigator.browserLanguage;
-    this.client.xReferrer = document.referrer;
-    this.client.config.eventURL = client.eventURL || "https://event.convertmax.io";
-    this.client.doNotTrack = false;
-    this.client.cpc = false;
-    this.client.organic = false;
-    this.client.social = false;
-    this.client.mobile = false;
-    this.client.rootDomain = window.location.hostname.split('.').slice(-2).join('.');
-    this.client.visitor = client.visitor || "";
-    this.client.session_id = client.session_id || "";
-    this.client.gclid = _valid_gclid();
-    this.client.msclk = _valid_msclk();
-    this.client.cf_uvid = null;
-    this.client.event_request = CMAjax({
-      baseUrl: this.client.config.eventURL,
-      headers: {
-        "content-type": "application/json",
-        "Accept-Language": this.client.language,
-        "X-Referer": this.client.xReferrer,
-        "x-access-token": this.client.config.apiKey,
-        "Authorization": "Bearer " + this.client.config.apiKey
-      }
-    });
-
-    // Init
-
-    // Process Do Not Track
-    var optoutCookie = _getCookie("cm_ignore_event");
-    if (
-      client.hasOwnProperty("opt_out_tracking_by_default") &&
-      client.opt_out_tracking_by_default.toString() === "true"
-    ) {
-      this.client.doNotTrack = true;
-    } else if (optoutCookie) {
-      this.client.doNotTrack = true;
-    } else if (
-      window.doNotTrack ||
-      navigator.doNotTrack ||
-      navigator.msDoNotTrack || (window.external && "msTrackingProtectionEnabled" in window.external)
-    ) {
-      // The browser supports Do Not Track!
-      if (
-        window.doNotTrack == "1" ||
-        navigator.doNotTrack == "yes" ||
-        navigator.doNotTrack == "1" ||
-        navigator.msDoNotTrack == "1"
-      ) {
-        this.client.doNotTrack = true;
-      }
-    }
-
-    if (!this.client.visitor) {
-      var hasStorage =
-        typeof Storage !== "undefined" && typeof localStorage !== "undefined";
-
-      if (hasStorage) {
-        var visitor_id = localStorage.getItem("cm_visitor");
-        if (!visitor_id) {
-          visitor_id = _unique_visitor_id();
-          localStorage.setItem("cm_visitor", visitor_id);
-          document.cookie =
-            "cm_visitor=" +
-            visitor_id +
-            "; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/; domain=" + this.client.rootDomain + ";";
-        } else {
-          if (!_getCookie("cm_visitor")) {
-            document.cookie =
-              "cm_visitor=" +
-              visitor_id +
-              "; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/; domain=" + this.client.rootDomain + ";";
+          if (query) {
+            await dispatch(
+              Object.assign(
+                {
+                  type: "track",
+                  event: "search",
+                  properties: Object.assign({}, getAutoPageProperties(), {
+                    engine: organicHost,
+                    query: query,
+                    referrer: referrer
+                  }),
+                  userId: identifiedUserId
+                },
+                createBaseEnvelope()
+              )
+            );
           }
         }
 
-        // Set session visitor
-        this.client.visitor = visitor_id;
+        return;
+      }
+
+      var socialHost =
+        options.autoSocial === false ? undefined : findMatchingHost(host, SOCIAL_HOSTS);
+      if (socialHost && !hasPaidAttribution) {
+        lastReferrerSignature = signature;
+
+        await dispatch(
+          Object.assign(
+            {
+              type: "track",
+              event: "social",
+              properties: Object.assign({}, getAutoPageProperties(), {
+                host: socialHost,
+                referrer: referrer
+              }),
+              userId: identifiedUserId
+            },
+            createBaseEnvelope()
+          )
+        );
       }
     }
 
-    if (!this.client.session_id) {
-      var session_id = _getCookie("cm_session");
-      if (!session_id) {
-        session_id = _unique_session_id(this.client.visitor.slice(0, 3));
-        var session_expire = new Date();
-        // Add period in minutes
-        session_expire.setMinutes(session_expire.getMinutes() + 35);
-        document.cookie =
-          "cm_session=" +
-          session_id +
-          "; expires=" +
-          session_expire.toUTCString() + '; path=/; domain=' + this.client.rootDomain + ';';
+    function populateFormHelpers() {
+      var visitorInputs = document.querySelectorAll('input[name="cm_visitor"]');
+      var sessionInputs = document.querySelectorAll('input[name="cm_session"]');
+
+      for (var index = 0; index < visitorInputs.length; index += 1) {
+        visitorInputs[index].value = anonymousId;
       }
 
-      // Set session id
-      this.client.session_id = session_id;
-    }
-  };
-
-  ConvertmaxClient._emitEvent = function (evt) {
-    // Dispatch sustom event
-    var event;
-    if (typeof (Event) === 'function') {
-      event = new Event(evt);
-    } else {
-      // IE 11
-      event = document.createEvent('Event');
-      event.initEvent(evt, true, true);
+      for (var sessionIndex = 0; sessionIndex < sessionInputs.length; sessionIndex += 1) {
+        sessionInputs[sessionIndex].value = sessionId || "";
+      }
     }
 
-    window.dispatchEvent(event);
-  };
-
-  ConvertmaxClient._convertmaxLoaded = function() {
-    var event;
-    if (typeof (Event) === 'function') {
-      event = new Event('convertmaxLoaded');
-    } else {
-      // IE 11
-      event = document.createEvent('Event');
-      event.initEvent('convertmaxLoaded', true, true);
+    function captureIntegrations() {
+      cfUvid = getBrowserStorageValue("cf_uvid") || undefined;
+      updatePublicState();
     }
-    window.dispatchEvent(event);
-  };
 
-  ConvertmaxClient._convertmaxReady = function() {
-    if(window.Convertmax.loaded === false) {
-      this._config({});
+    function detectMobile() {
+      mobile = detectMobileUserAgent(window.navigator.userAgent);
+      updatePublicState();
     }
-    var event;
-    if (typeof (Event) === 'function') {
-      event = new Event('convertmaxReady');
-    } else {
-      // IE 11
-      event = document.createEvent('Event');
-      event.initEvent('convertmaxReady', true, true);
+
+    function hydrateDoNotTrack() {
+      var browserDoNotTrack =
+        window.doNotTrack === "1" ||
+        window.navigator.doNotTrack === "1" ||
+        window.navigator.doNotTrack === "yes" ||
+        window.navigator.msDoNotTrack === "1";
+
+      if (
+        browserDoNotTrack ||
+        getBrowserStorageValue(OPT_OUT_STORAGE_KEY) === "1" ||
+        getCookieValue(OPT_OUT_STORAGE_KEY) === "1"
+      ) {
+        doNotTrack = true;
+      }
+
+      updatePublicState();
     }
-    window.dispatchEvent(event);
-  };
 
-  ConvertmaxClient.config = function(config) {
-    ConvertmaxClient._config(config);
-    _attachClickHandlers();
-    _chkCPC();
-    _chkOrganic();
-    _chkSocial();
-    _chkMobile();
-    _chkForms();
-    _chkIntegrations();
-    ConvertmaxClient._convertmaxReady();
-  };
+    function attachExitFlush() {
+      if (exitFlushAttached) {
+        return;
+      }
 
-  ConvertmaxClient.addClickTracking = function (selector) {
-    if (selector) {
-      // Add searcheo class to all underlying links
-      var elements = _toArray(document.querySelectorAll(selector));
-      elements.forEach(function (element) {
-        var links = element.getElementsByTagName("a");
-        for (var i = 0; i < links.length; i++) {
-          links[i].classList.add("searcheo");
+      exitFlushAttached = true;
+
+      window.addEventListener(
+        "pagehide",
+        function () {
+          if (options.disabled) {
+            return;
+          }
+
+          void sendEnvelope(
+            Object.assign(
+              {
+                type: "page",
+                name: "page_exit",
+                properties: {
+                  event_type: "background_flush",
+                  page: window.location.href
+                },
+                userId: identifiedUserId
+              },
+              createBaseEnvelope()
+            ),
+            options
+          );
+        },
+        { once: true }
+      );
+    }
+
+    function attachClickTracking() {
+      if (clickTrackingAttached) {
+        return;
+      }
+
+      clickTrackingAttached = true;
+      var seedElements = document.querySelectorAll("." + CLICK_TRACK_CLASS);
+      for (var index = 0; index < seedElements.length; index += 1) {
+        syncAnchorsWithin(seedElements[index]);
+      }
+
+      document.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!target || typeof target.closest !== "function") {
+          return;
         }
+
+        var anchor = target.closest("a");
+        if (!anchor || !anchor.classList || !anchor.classList.contains(CLICK_TRACK_CLASS)) {
+          return;
+        }
+
+        var cmType = anchor.getAttribute("data-sio-type");
+        var eventType = cmType === "add-cart" ? "add_cart" : "click";
+
+        void api.track(eventType, {
+          cm_type: cmType || undefined,
+          cm_target: anchor.href
+        });
       });
     }
-  };
 
-  ConvertmaxClient.track = function (evt_type, details) {
-    var conversion_evts = ["convert", "cpc", "organic", "search", "social", "custom"];
+    async function applyBrowserLifecycle() {
+      hydrateDoNotTrack();
+      syncVisitorState();
+      sessionId = getOrCreateSessionId();
+      updatePublicState();
 
-    // Check do not track
-    if (this.client.doNotTrack && conversion_evts.indexOf(evt_type) === -1) {
-      if (
-        evt_type === "click" &&
-        details.hasOwnProperty("cm_type") &&
-        details.cm_type == "search"
-      ) {} else {
-        return true;
+      attachClickTracking();
+
+      if (options.autoPage) {
+        attachAutoPageListeners();
+        await emitAutoPageView();
+      }
+
+      if (options.autoCpc !== false) {
+        await detectAttribution();
+      } else {
+        refreshAttributionState(getQueryParams());
+        updatePublicState();
+      }
+
+      await detectReferrerTraffic();
+
+      if (options.autoMobile !== false) {
+        detectMobile();
+      }
+
+      if (options.chkForms !== false) {
+        populateFormHelpers();
+      }
+
+      if (options.captureCfUvid === true) {
+        captureIntegrations();
+      }
+
+      attachExitFlush();
+      dispatchBrowserEvent("convertmaxReady");
+      api.ready = true;
+      if (window.Convertmax) {
+        window.Convertmax.ready = true;
       }
     }
 
-    if (evt_type && details) {
-      var payload = {
-        event_type: evt_type,
-        visitor: this.client.visitor,
-        session_id: this.client.session_id,
-        gclid: this.client.gclid,
-        msclk: this.client.msclk,
-        data: details
-      };
-
-      if (this.client.cf_uvid) {
-        payload['cf_uvid'] = this.client.cf_uvid;
+    async function init() {
+      if (initialized) {
+        return;
       }
 
-      //details = JSON.stringify(details);
-      if (
-        evt_type === "click" ||
-        evt_type === "convert" ||
-        evt_type === "cpc" ||
-        evt_type === "organic" ||
-        evt_type === "social" ||
-        evt_type === "search" ||
-        evt_type === "page_view" ||
-        evt_type === "add_cart" ||
-        evt_type === "custom"
-      ) {
-        this.client.event_request.data = payload;
-        this.client.event_request.post("/v1/track/", payload);
-      }
+      initialized = true;
+      await applyBrowserLifecycle();
     }
 
-    return true;
-  };
+    var api = {
+      client: publicState,
+      async init() {
+        await init();
+      },
+      async config(nextOptions) {
+        var mergedOptions = Object.assign({}, options, nextOptions || {});
+        if (!mergedOptions.host && mergedOptions.eventURL) {
+          mergedOptions.host = mergedOptions.eventURL;
+        }
+        if (!mergedOptions.host) {
+          mergedOptions.host = DEFAULT_HOST;
+        }
 
-  // Opt a user out of data collection
-  ConvertmaxClient.optoutTracking = function () {
-    document.cookie =
-      "cm_ignore_event=1; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/;  domain=" + this.client.rootDomain + ";";
-    this.client.doNotTrack = true;
-  };
+        options = mergedOptions;
+        initialized = true;
+        await applyBrowserLifecycle();
+      },
+      async track(event, properties) {
+        await dispatch(
+          Object.assign(
+            {
+              type: "track",
+              event: event,
+              properties: properties || {},
+              userId: identifiedUserId
+            },
+            createBaseEnvelope()
+          )
+        );
+      },
+      async identify(userId, traits) {
+        identifiedUserId = userId || identifiedUserId;
+        await dispatch(
+          Object.assign(
+            {
+              type: "identify",
+              userId: identifiedUserId,
+              traits: traits || {}
+            },
+            createBaseEnvelope()
+          )
+        );
+      },
+      async page(name, properties) {
+        await dispatch(
+          Object.assign(
+            {
+              type: "page",
+              name: name,
+              properties: groupedId
+                ? Object.assign({}, properties || {}, { groupId: groupedId })
+                : properties || {},
+              userId: identifiedUserId
+            },
+            createBaseEnvelope()
+          )
+        );
+      },
+      async group(groupId, traits) {
+        groupedId = groupId;
+        await dispatch(
+          Object.assign(
+            {
+              type: "group",
+              groupId: groupId,
+              traits: traits || {},
+              userId: identifiedUserId
+            },
+            createBaseEnvelope()
+          )
+        );
+      },
+      async alias(userId) {
+        var previousId = identifiedUserId;
+        identifiedUserId = userId;
+        await dispatch(
+          Object.assign(
+            {
+              type: "alias",
+              userId: userId,
+              previousId: previousId
+            },
+            createBaseEnvelope()
+          )
+        );
+      },
+      addClickTracking(selector) {
+        if (!selector) {
+          return;
+        }
 
-  // Opt a user back in to data collection
-  ConvertmaxClient.optinTracking = function () {
-    document.cookie =
-      "cm_ignore_event=0; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/;  domain=" + this.client.rootDomain + ";";
-    this.client.doNotTrack = false;
-  };
+        var elements = document.querySelectorAll(selector);
+        for (var index = 0; index < elements.length; index += 1) {
+          var element = elements[index];
+          if (element.tagName === "A") {
+            element.classList.add(CLICK_TRACK_CLASS);
+          } else {
+            syncAnchorsWithin(element);
+          }
+        }
+      },
+      optoutTracking() {
+        doNotTrack = true;
+        setBrowserStorageValue(OPT_OUT_STORAGE_KEY, "1");
+        setCookieValue(OPT_OUT_STORAGE_KEY, "1", 253402300799000);
+        updatePublicState();
+      },
+      optinTracking() {
+        doNotTrack = false;
+        removeBrowserStorageValue(OPT_OUT_STORAGE_KEY);
+        clearCookieValue(OPT_OUT_STORAGE_KEY);
+        updatePublicState();
+      },
+      optoutStatus() {
+        return doNotTrack;
+      },
+      reset() {
+        identifiedUserId = undefined;
+        groupedId = undefined;
+        anonymousId = createAnonymousId();
+        sessionId = getOrCreateSessionId();
+        attributionState = {};
+        syncVisitorState();
+        updatePublicState();
+      }
+    };
 
-  // Check a user's opt-out status
-  // Returns true of user is opted out of tracking locally
-  ConvertmaxClient.optoutStatus = function () {
-    return this.client.doNotTrack;
-  };
-
-  // Watch for new events
-  if (window.__convertmax_q !== "undefined") {
-    var res = Array.prototype["push"].apply(window.__convertmax_q, arguments); // call normal behaviour
-    _process_queued_event.apply(window.__convertmax_q, arguments); // finally call the callback supplied
+    updatePublicState();
+    return api;
   }
 
-  return ConvertmaxClient;
-}());
+  var client = createBrowserClient({ host: DEFAULT_HOST });
+  var queuedEntries = Array.isArray(window.__convertmax_q) ? window.__convertmax_q : [];
+  window.__convertmax_q = queuedEntries;
 
-Convertmax._convertmaxLoaded();
+  function toArray(entry) {
+    if (Array.isArray(entry)) {
+      return entry;
+    }
+
+    try {
+      return Array.prototype.slice.call(entry);
+    } catch (error) {
+      return [entry];
+    }
+  }
+
+  function invokeCommand(entry) {
+    var args = toArray(entry);
+    var action = args[0];
+
+    if (typeof action !== "string") {
+      return undefined;
+    }
+
+    switch (action) {
+      case "config":
+        return client.config(args[1] || {});
+      case "init":
+        return client.init();
+      case "track":
+        return client.track(args[1], args[2] || {});
+      case "identify":
+        return client.identify(args[1], args[2] || {});
+      case "page":
+        return client.page(args[1], args[2] || {});
+      case "group":
+        return client.group(args[1], args[2] || {});
+      case "alias":
+        return client.alias(args[1]);
+      case "addClickTracking":
+        return client.addClickTracking(args[1]);
+      case "optoutTracking":
+        return client.optoutTracking();
+      case "optinTracking":
+        return client.optinTracking();
+      case "reset":
+        return client.reset();
+      default:
+        return undefined;
+    }
+  }
+
+  function Convertmax() {
+    return invokeCommand(arguments);
+  }
+
+  Convertmax.client = client.client;
+  Convertmax.loaded = true;
+  Convertmax.ready = false;
+  Convertmax.version = VERSION;
+  Convertmax.init = function () {
+    return client.init();
+  };
+  Convertmax.config = function (config) {
+    return client.config(config);
+  };
+  Convertmax.track = function (event, properties) {
+    return client.track(event, properties);
+  };
+  Convertmax.identify = function (userId, traits) {
+    return client.identify(userId, traits);
+  };
+  Convertmax.page = function (name, properties) {
+    return client.page(name, properties);
+  };
+  Convertmax.group = function (groupId, traits) {
+    return client.group(groupId, traits);
+  };
+  Convertmax.alias = function (userId) {
+    return client.alias(userId);
+  };
+  Convertmax.addClickTracking = function (selector) {
+    return client.addClickTracking(selector);
+  };
+  Convertmax.optoutTracking = function () {
+    return client.optoutTracking();
+  };
+  Convertmax.optinTracking = function () {
+    return client.optinTracking();
+  };
+  Convertmax.optoutStatus = function () {
+    return client.optoutStatus();
+  };
+  Convertmax.reset = function () {
+    return client.reset();
+  };
+
+  window.Convertmax = Convertmax;
+
+  var queuePush = Array.prototype.push.bind(queuedEntries);
+  queuedEntries.push = function () {
+    var length = queuePush.apply(queuedEntries, arguments);
+    for (var index = 0; index < arguments.length; index += 1) {
+      invokeCommand(arguments[index]);
+    }
+    return length;
+  };
+
+  dispatchBrowserEvent("convertmaxLoaded");
+
+  queuedEntries.slice().forEach(function (entry) {
+    invokeCommand(entry);
+  });
+})(window, document);
