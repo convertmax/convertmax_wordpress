@@ -4,7 +4,7 @@ Tags: analytics, tracking, lead generation, forms
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,7 @@ Features:
 * Track on-site search events.
 * Optionally disable tracking for logged-in administrators.
 * Track supported form submissions for Contact Form 7, WPForms, and Formidable Forms.
+* Tested compatible with WordPress 5.8 through 7.0.
 
 After activation, go to **Convertmax > General Options** to configure your API key and tracking preferences.
 
@@ -82,6 +83,10 @@ Site owners are responsible for:
 
 == Changelog ==
 
+= 1.0.2 =
+* Sync bundled browser SDK to the latest convertmax_js release.
+* Tested compatible with WordPress 7.0.
+
 = 1.0.1 =
 * Upgrade the bundled browser SDK to locally hosted `cm_v2.min.js`.
 * Preserve the existing WordPress bootstrap and event queue compatibility.
@@ -91,6 +96,9 @@ Site owners are responsible for:
 * Settings page with general and form tracking options.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+Updates the bundled tracking SDK and confirms WordPress 7.0 compatibility.
 
 = 1.0.1 =
 Refreshes the bundled tracking SDK to the v2 local build.

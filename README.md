@@ -10,15 +10,16 @@ Convertmax tracks user activity and conversion events on your WordPress site.
 - Optional admin-user tracking exclusion.
 - Form event tracking toggles for Contact Form 7, WPForms, and Formidable Forms.
 
+## Compatibility
+
+- Requires WordPress 5.8 or later.
+- Tested compatible with WordPress 7.0.
+
 ## Installation
 
 1. Upload the `convertmax` folder to `/wp-content/plugins/`.
 2. Activate **Convertmax** in Plugins.
 3. Open **Convertmax** in wp-admin and save your settings.
-
-## Local Testing
-
-- WordPress 7.0 local smoke test guide: [`TESTING_WORDPRESS_7.md`](../TESTING_WORDPRESS_7.md)
 
 ## Support
 
