@@ -38,6 +38,16 @@
       envelopeKey: "gclid",
       platform: "google"
     },
+    gbraid: {
+      storageKey: "cm_gbraid",
+      envelopeKey: "gbraid",
+      platform: "google"
+    },
+    wbraid: {
+      storageKey: "cm_wbraid",
+      envelopeKey: "wbraid",
+      platform: "google"
+    },
     msclkid: {
       storageKey: "cm_msclk",
       envelopeKey: "msclk",
@@ -54,6 +64,17 @@
       platform: "facebook"
     },
     scclid: {
+      storageKey: "cm_scclid",
+      envelopeKey: "scclid",
+      platform: "snapchat"
+    },
+    // Snap uses ScCid in ads; keep aliases that persist/send as scclid.
+    sccid: {
+      storageKey: "cm_scclid",
+      envelopeKey: "scclid",
+      platform: "snapchat"
+    },
+    ScCid: {
       storageKey: "cm_scclid",
       envelopeKey: "scclid",
       platform: "snapchat"
