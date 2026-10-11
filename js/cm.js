@@ -455,6 +455,22 @@
       throw lastError || new Error("Convertmax request failed");
     }
 
+    function queueEnvelope(envelope, transportOptions) {
+      var sendPromise = sendEnvelope(envelope, transportOptions).catch(function (error) {
+        if (
+          transportOptions.debug &&
+          window.console &&
+          typeof window.console.debug === "function"
+        ) {
+          window.console.debug("[convertmax] request failed", error);
+        }
+      });
+
+      if (transportOptions.debug) {
+        return sendPromise;
+      }
+    }
+
     function createBaseEnvelope() {
       return Object.assign(
         {
@@ -486,7 +502,7 @@
         window.console.debug("[convertmax]", envelope);
       }
 
-      await sendEnvelope(envelope, options);
+      return queueEnvelope(envelope, options);
     }
 
     async function emitAutoPageView() {
@@ -781,7 +797,7 @@
             return;
           }
 
-          void sendEnvelope(
+          queueEnvelope(
             Object.assign(
               {
                 type: "page",

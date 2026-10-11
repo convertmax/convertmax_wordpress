@@ -5,7 +5,7 @@
  * Plugin Name:       Convertmax
  * Plugin URI:        https://convertmax.io
  * Description:       Tracks users as they navigate your WordPress site and form interactions for Convertmax.
- * Version:           1.0.2
+ * Version:           1.0.3
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            cbconvertmax
@@ -26,7 +26,7 @@ if (!defined('WPINC')) {
  * Start at version 1.0.1 and use SemVer - https://semver.org
  * Rename this for your plugin and update it as you release new versions.
  */
-define('CONVERTMAX_VERSION', '1.0.2');
+define('CONVERTMAX_VERSION', '1.0.3');
 define('CONVERTMAX_BASE', plugin_basename(__FILE__));
 
 /**

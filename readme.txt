@@ -4,7 +4,7 @@ Tags: analytics, tracking, lead generation, forms
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,10 @@ Site owners are responsible for:
 
 == Changelog ==
 
+= 1.0.3 =
+* Ship the updated `cm_v2.min.js` build with `gbraid`/`wbraid` and Snap `ScCid` capture.
+* Keep the source `cm.js` tracker in sync with convertmax_js.
+
 = 1.0.2 =
 * Sync bundled browser SDK to the latest convertmax_js release.
 * Tested compatible with WordPress 7.0.
@@ -96,6 +100,9 @@ Site owners are responsible for:
 * Settings page with general and form tracking options.
 
 == Upgrade Notice ==
+
+= 1.0.3 =
+Updates the production browser SDK with Google Privacy Sandbox and Snap click ID capture.
 
 = 1.0.2 =
 Updates the bundled tracking SDK and confirms WordPress 7.0 compatibility.
