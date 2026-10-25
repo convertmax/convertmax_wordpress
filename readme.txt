@@ -3,8 +3,8 @@ Contributors: cbconvertmax
 Tags: analytics, tracking, lead generation, forms
 Requires at least: 5.8
 Tested up to: 7.0
-Requires PHP: 7.4
-Stable tag: 1.0.3
+Requires PHP: 8.2
+Stable tag: 1.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ Site owners are responsible for:
 
 == Changelog ==
 
+= 1.0.4 =
+* Require PHP 8.2 or later, which includes the October 2026 PHP security fixes.
+
 = 1.0.3 =
 * Ship the updated `cm_v2.min.js` build with `gbraid`/`wbraid` and Snap `ScCid` capture.
 * Keep the source `cm.js` tracker in sync with convertmax_js.
@@ -100,6 +103,9 @@ Site owners are responsible for:
 * Settings page with general and form tracking options.
 
 == Upgrade Notice ==
+
+= 1.0.4 =
+Requires PHP 8.2 or later. Sites on older PHP versions will not be able to install or update this release.
 
 = 1.0.3 =
 Updates the production browser SDK with Google Privacy Sandbox and Snap click ID capture.
